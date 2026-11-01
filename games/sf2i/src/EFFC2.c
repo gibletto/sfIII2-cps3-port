@@ -1,0 +1,108 @@
+/*
+ * EFFC2.C  Effect C2: stage objects that drop on the landing
+ *
+ * effect_C2_init creates four eff45_char_table objects from effc2_data_tbl (x, y, priority,
+ * pattern). Each plays its pattern once bg_land_flag is set, clears bg_etc_flag when the pattern
+ * ends, waits for BG1's state 2 and then hides and frees itself.
+ */
+
+#include "structs.h"
+#include "work.h"
+#include "romdata.h"
+#include "extern.h"
+#include "CHARMOVE.h"
+#include "charmove_2.h"
+#include "ta_sub.h"
+#include "EFFECT.h"
+#include "effect_2.h"
+#include "aboutspr.h"
+#include "EFFC2.h"
+#include "EFF45.h"
+
+/* routine_no[0] */
+#define R0_INIT         0       /* start the pattern */
+#define R0_WAIT         1       /* wait for the landing */
+#define R0_FALL         2       /* play the drop pattern */
+#define R0_HOLD         3       /* wait for background layer 1 */
+#define R0_HIDE         4       /* hide */
+#define R0_END          5       /* one more frame */
+#define R0_KILL         6       /* (default) put the work back */
+
+
+
+void effect_C2_move(WORK_Other* ewk) {
+    if (obr_no_disp_check()) {
+        return;
+    }
+    switch (ewk->wu.routine_no[0]) {
+    case R0_INIT:
+        ewk->wu.routine_no[0]++;
+        ewk->wu.disp_flag = 1;
+        set_char_move_init(&ewk->wu, 0, ewk->wu.char_index);
+        break;
+    case R0_WAIT:
+        if (bg_land_flag) {
+            ewk->wu.routine_no[0]++;
+        }
+        disp_pos_trans_entry(ewk);
+        break;
+    case R0_FALL:
+        char_move(&ewk->wu);
+        if (ewk->wu.cg_type) {
+            ewk->wu.routine_no[0]++;
+            bg_etc_flag = 0;
+        }
+        disp_pos_trans_entry(ewk);
+        break;
+    case R0_HOLD:
+        if (bg_w.bgw[1].r_no_1 >= 2) {
+            ewk->wu.routine_no[0]++;
+        }
+        disp_pos_trans_entry(ewk);
+        break;
+    case R0_HIDE:
+        ewk->wu.disp_flag = 0;
+        ewk->wu.routine_no[0]++;
+        break;
+    case R0_END:
+        ewk->wu.routine_no[0]++;
+        break;
+    default:
+        all_cgps_put_back(&ewk->wu);
+        push_effect_work(&ewk->wu);
+        break;
+    }
+}
+
+
+
+s32 effect_C2_init(void) {
+    WORK_Other* ewk;
+    s16 ix;
+    s16 i;
+    const s16* data_ptr = &effc2_data_tbl[0][0];
+    for (i = 0; i < 4; i++) {
+        if ((ix = pull_effect_work(4)) == -1) {
+            return -1;
+        }
+        ewk = (WORK_Other*)frw[ix];
+        ewk->wu.be_flag = 1;
+        ewk->wu.id = 122;
+        ewk->wu.work_id = 16;
+        ewk->wu.cgromtype = 1;
+        ewk->wu.disp_flag = 0;
+        ewk->wu.rl_flag = 0;
+        ewk->wu.type = i;
+        ewk->wu.my_family = 2;
+        ewk->wu.my_col_mode = 0x4200;
+        ewk->wu.my_col_code = 0x2040;
+        ewk->wu.position_x = ewk->wu.xyz[0].disp.pos = *data_ptr++;
+        ewk->wu.position_y = ewk->wu.xyz[1].disp.pos = *data_ptr++;
+        ewk->wu.my_priority = ewk->wu.position_z = *data_ptr++;
+        ewk->wu.char_index = *data_ptr++;
+        ewk->wu.xyz[0].disp.low = 0;
+        ewk->wu.xyz[1].disp.low = 0;
+        ewk->wu.char_table[0] = eff45_char_table;
+    }
+    return 0;
+}

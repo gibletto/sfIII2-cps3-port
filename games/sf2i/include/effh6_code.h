@@ -1,0 +1,10 @@
+#ifndef EFFH6_CODE_H
+#define EFFH6_CODE_H
+
+#include "structs.h"
+
+s32 end_cut_check(void);
+void effect_H6_move(WORK_Other* ewk);
+s32 effect_H6_init(s16 timer, const s8* str, s16 X, s16 Y, s16 Original_Color, s32 unused);
+
+#endif

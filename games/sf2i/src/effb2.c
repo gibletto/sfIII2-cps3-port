@@ -1,0 +1,202 @@
+/*
+ * EFFB2.C  Round-start FIGHT call sequence (effect B2)
+ *
+ * Controls the start-of-round call. effect_B2_init is called by the round manager (manage_2.c) at the
+ * start of each round: it loads colour 3 and char gfx 0x9130, decides from Game_setting.Battle_Number and
+ * Round_num whether this is the final round (type 1) or a normal round (type 0) and spawns effect B3,
+ * the display child that shows the round number and FIGHT (EFFB3.C). effect_B2_move waits on
+ * rf_b2_flag counts (more than 9 in the final round, else 4) and timers, checks Break_Into after each
+ * of its first five states (b3_Break_Into_check aborts the sequence) and then sets Next_Step so the
+ * round can begin.
+ */
+
+#include "structs.h"
+#include "work.h"
+#include "romdata.h"
+#include "extern.h"
+#include "EFFI5.h"
+#include "effi6.h"
+#include "EFFL4.h"
+#include "effl5.h"
+#include "effl6.h"
+#include "ta_sub.h"
+#include "EFFECT.h"
+#include "effect_2.h"
+#include "PLS02.h"
+#include "aboutspr.h"
+#include "effb2.h"
+#include "bg_sub.h"
+#include "bg_sub_2.h"
+#include "bg_sub_3.h"
+#include "bg_sub_4.h"
+#include "bg_sub_5.h"
+#include "effb3.h"
+#include "EFFB4.h"
+
+/* routine_no[0] */
+#define R0_INIT         0       /* clear the counters */
+#define R0_ROUND        1       /* wait for the ROUND letters */
+#define R0_NUMBER       2       /* wait for the round number */
+#define R0_ROUND_HOLD   3       /* hold the round display */
+#define R0_ROUND_OUT    4       /* wait for the letters to shrink away */
+#define R0_FIGHT        5       /* wait for FIGHT to grow in */
+#define R0_FIGHT_HOLD   6       /* hold FIGHT */
+#define R0_FIGHT_OUT    7       /* wait for FIGHT to fly off */
+#define R0_GO           8       /* let the round start */
+#define R0_END          9       /* one more frame */
+#define R0_BREAK        99      /* broken into: one frame */
+#define R0_BREAK_END    100     /* one more frame */
+
+
+
+s16 rf_b2_flag;
+s16 b2_curr_no;
+
+
+
+/* Step through the round-start call until the round can begin (Next_Step). */
+void effect_B2_move(WORK_Other* ewk) {
+    s16 work = rf_b2_flag;
+    switch (ewk->wu.routine_no[0]) {
+    case R0_INIT:
+        ewk->wu.routine_no[0]++;
+        ewk->wu.old_rno[0] = ewk->wu.old_rno[1] = ewk->wu.old_rno[2] = 0;
+        rf_b2_flag = 0;
+        b2_curr_no = 0;
+        b3_Break_Into_check(ewk);
+        break;
+    case R0_ROUND:
+        if (ewk->wu.type) {
+            if (work > 9) {
+                ewk->wu.routine_no[0] += 2;
+                ewk->wu.hit_stop = 32;
+                rf_b2_flag = 0;
+            }
+        } else if (work > 4) {
+            ewk->wu.routine_no[0]++;
+            ewk->wu.hit_stop = 32;
+            rf_b2_flag = 0;
+        }
+        b3_Break_Into_check(ewk);
+        break;
+    case R0_NUMBER:
+        if (work) {
+            ewk->wu.routine_no[0]++;
+            ewk->wu.hit_stop = 32;
+        }
+        b3_Break_Into_check(ewk);
+        break;
+    case R0_ROUND_HOLD:
+        ewk->wu.hit_stop--;
+        if (ewk->wu.hit_stop < 0) {
+            ewk->wu.routine_no[0]++;
+            ewk->wu.hit_stop = 48;
+            b2_curr_no = 0;
+            rf_b2_flag = 0;
+        }
+        b3_Break_Into_check(ewk);
+        break;
+    case R0_ROUND_OUT:
+        if (ewk->wu.type) {
+            if (work > 9) {
+                ewk->wu.routine_no[0]++;
+                rf_b2_flag = 0;
+            }
+        } else if (work > 4) {
+            ewk->wu.routine_no[0]++;
+            rf_b2_flag = 0;
+        }
+        b3_Break_Into_check(ewk);
+        break;
+    case R0_FIGHT:
+        if (work) {
+            ewk->wu.routine_no[0]++;
+            rf_b2_flag = 0;
+            ewk->wu.hit_stop = 40;
+        }
+        break;
+    case R0_FIGHT_HOLD:
+        ewk->wu.hit_stop--;
+        if (ewk->wu.hit_stop <= 0) {
+            ewk->wu.routine_no[0]++;
+        }
+        break;
+    case R0_FIGHT_OUT:
+        if (work) {
+            ewk->wu.routine_no[0]++;
+            ewk->wu.hit_stop = 32;
+        }
+        break;
+    case R0_GO:
+        Next_Step = 1;
+        ewk->wu.routine_no[0]++;
+        break;
+    case R0_END:
+        ewk->wu.routine_no[0]++;
+        break;
+    case R0_BREAK:
+    case R0_BREAK_END:
+        ewk->wu.routine_no[0]++;
+        break;
+    default:
+        all_cgps_put_back(&ewk->wu);
+        push_effect_work(&ewk->wu);
+        break;
+    }
+}
+
+
+
+s32 b3_Break_Into_check(WORK_Other* ewk) {
+    if (Break_Into) {
+        ewk->wu.routine_no[0] = R0_BREAK;
+        return 1;
+    }
+    return 0;
+}
+
+
+
+/* Create the round-start call at the start of each round: the final-round call or the normal one. */
+s32 effect_B2_init(void) {
+    WORK_Other* ewk;
+    s16 ix;
+    if ((ix = pull_effect_work(3)) == -1) {
+        return -1;
+    }
+    ewk = (WORK_Other*)frw[ix];
+    ewk->wu.be_flag = 1;
+    ewk->wu.id = 112;
+    ewk->wu.work_id = 0x10;
+    ewk->wu.my_family = 2;
+    load_any_color(3);
+    load_char_gfx(0x9130, 1);
+    switch (Game_setting.Battle_Number) {
+    case 0:
+        ewk->wu.type = 0;
+        break;
+    case 1:
+        if (Round_num == 2) {
+            ewk->wu.type = 1;
+        } else {
+            ewk->wu.type = 0;
+        }
+        break;
+    case 2:
+        if (Round_num == 4) {
+            ewk->wu.type = 1;
+        } else {
+            ewk->wu.type = 0;
+        }
+        break;
+    case 3:
+        if (Round_num == 6) {
+            ewk->wu.type = 1;
+        } else {
+            ewk->wu.type = 0;
+        }
+        break;
+    }
+    effect_B3_init(ewk);
+    return 0;
+}

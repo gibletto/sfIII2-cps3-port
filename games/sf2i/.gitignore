@@ -1,0 +1,8 @@
+/obj/
+/build/
+/sf2i.abs
+/sf2i.map
+/sf2i.bin
+/rom/*
+!/rom/README
+__pycache__/

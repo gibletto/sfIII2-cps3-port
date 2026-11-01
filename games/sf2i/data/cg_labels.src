@@ -1,0 +1,7 @@
+; CCG_06800000: CCG 06800000-06DA767C, the graphics: only their size and the label of their directory (cg_data_tbl) here, the bytes come from the ROM at build time
+          .CPU        SH2
+          .SECTION    CCG,DATA,ALIGN=4
+          .EXPORT     _cg_data_tbl
+_cg_data_tbl:
+          .RES.B      5928572
+          .END

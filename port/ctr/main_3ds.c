@@ -1,0 +1,247 @@
+/*
+ * main_3ds.c  The 3DS front end (libctru, citro3d)
+ *
+ * The ROM files are in sdmc:/sf2i/rom-data, unpacked there from sdmc:/sf2i/sfiii2n.zip the first time the game
+ * runs (cps3_romset.c). The EEPROM is saved there too.
+ * The 48 MB graphics ROM does not fit in an Old 3DS's memory, so it is streamed from the SD card through a
+ * page cache, with a thread reading ahead (ctr_prefetch.c).
+ *
+ * Top screen: the game, drawn by the GPU (ctr_video.c). Bottom screen: blank, except for messages and the button
+ * setup. Sound: the DSP (ctr_sound.c).
+ *
+ * Controls: D-pad or Circle Pad to move; the other buttons are mapped in sdmc:/sf2i/controls.ini (ctr_controls.c).
+ * SELECT inserts a coin; held with START it is the test switch (settings, free play), with L the service coin,
+ * with R the button setup screen, with B it quits.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+
+#include <3ds.h>
+
+#include "types.h"
+#include "cps3_host.h"
+#include "cps3_kernel.h"
+#include "ctr_video.h"
+#include "ctr_prefetch.h"
+#include "ctr_sound.h"
+#include "ctr_controls.h"
+#include "cps3_romset.h"
+
+#define ROM_DIR         "sdmc:/sf2i/rom-data"
+#define ROM_SET         "sfiii2n.zip"
+#define USER5_PAGES     4096        /* graphics ROM cache in 16 KB pages: as many as memory allows */
+#define USER5_RESERVE   (4u << 20)  /* memory left free for later allocations (task stacks) */
+
+/* The GPU's memory (textures, framebuffers, command and sound buffers) needs about 12 MB; about 1 MB of 13 is
+   left while the game runs. libctru's default gives it up to 32 MB; the rest is better spent on the graphics ROM
+   cache, which comes from the normal heap. */
+u32 __ctru_linear_heap_size = 13u << 20;
+
+static PrintConsole con;
+static u32 coin_frames;             /* a coin holds the switch for a few frames */
+static int select_combo;            /* SELECT was used with another button: no coin on release */
+
+enum { QUIT, PLAY, SETUP };
+
+/* reads the buttons into the board's switches */
+static int read_inputs(void) {
+    static const struct {
+        u32 key;
+        u32 in;
+    } dirs[] = {
+        { KEY_UP, CPS3_IN_UP }, { KEY_DOWN, CPS3_IN_DOWN }, { KEY_LEFT, CPS3_IN_LEFT }, { KEY_RIGHT, CPS3_IN_RIGHT },
+    };
+    const u32 shifted = KEY_START | KEY_L | KEY_R | KEY_B;
+    u32 held = hidKeysHeld();
+    u32 down = hidKeysDown();
+    u32 p1 = 0, sys = 0;
+    u32 i;
+    if (held & KEY_SELECT) {
+        if (down & KEY_B) {
+            return QUIT;
+        }
+        if (down & KEY_R) {
+            select_combo = 0;
+            return SETUP;
+        }
+        if (held & KEY_START) {
+            sys |= CPS3_SYS_TEST;
+        }
+        if (held & KEY_L) {
+            sys |= CPS3_SYS_SERVICE;
+        }
+        if (held & shifted) {
+            select_combo = 1;
+        }
+        held &= ~shifted;
+    } else if (hidKeysUp() & KEY_SELECT) {
+        if (!select_combo) {
+            coin_frames = 6;
+        }
+        select_combo = 0;
+    }
+    for (i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
+        if (held & dirs[i].key) {
+            p1 |= dirs[i].in;
+        }
+    }
+    p1 |= ctr_controls_map(held);
+    if (coin_frames != 0) {
+        coin_frames--;
+        p1 |= CPS3_IN_COIN;
+    }
+    cps3_set_inputs(p1, 0, sys);
+    return PLAY;
+}
+
+/* waits up to `frames` frames for a button; with frames 0, waits for START */
+static void wait_key(u32 frames) {
+    u32 n = 0;
+    while (aptMainLoop()) {
+        hidScanInput();
+        if (frames == 0 ? (hidKeysDown() & KEY_START) != 0 : (hidKeysDown() != 0 || ++n >= frames)) {
+            break;
+        }
+        gspWaitForVBlank();
+    }
+}
+
+static int fail(const char* message) {
+    printf("\n%s\n\nPress START to quit.\n", message);
+    wait_key(0);
+    gfxExit();
+    return 0;
+}
+
+/* the bottom screen is blank while the game runs */
+static void bottom_help(void) {
+    consoleClear();
+}
+
+static int is_file(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (f != NULL) {
+        fclose(f);
+    }
+    return f != NULL;
+}
+
+static int rom_files_present(void) {
+    return is_file(ROM_DIR "/bios.bin") && is_file(ROM_DIR "/cg.bin") && is_file(ROM_DIR "/user5.bin");
+}
+
+static void unpack_progress(u32 done, u32 total) {
+    const u32 width = 30;
+    u32 i, n = done * width / total;
+    printf("\x1b[16;2H[");
+    for (i = 0; i < width; i++) {
+        putchar(i < n ? '#' : '-');
+    }
+    printf("] %3lu%%", (unsigned long)(done * 100 / total));
+    gfxFlushBuffers();
+    gspWaitForVBlank();
+}
+
+/* the first run: unpacks the ROM set zip into the files the game reads. 0 on failure, after saying why */
+static int unpack_rom_set(void) {
+    static const char* const places[2] = { "sdmc:/sf2i/" ROM_SET, ROM_DIR "/" ROM_SET };
+    const char* zip = NULL;
+    char msg[700];
+    int i;
+    for (i = 0; i < 2 && zip == NULL; i++) {
+        zip = is_file(places[i]) ? places[i] : NULL;
+    }
+    if (zip == NULL) {
+        return fail("The ROM set was not found.\n\n"
+                    "Put " ROM_SET " (MAME, non-merged)\nin sdmc:/sf2i/\n\nSee the README.");
+    }
+    mkdir(ROM_DIR, 0777);
+    consoleClear();
+    printf("\n Street Fighter III 2nd Impact\n\n"
+           "\x1b[33m ONE-TIME ROM UNPACK\x1b[0m\n\n"
+           " Unpacking " ROM_SET " into\n " ROM_DIR "\n\n"
+           " This happens only once and takes\n about a minute.\n\n"
+           " Please don't turn off the 3DS or\n take out the SD card.\n");
+    unpack_progress(0, 1);
+    if (cps3_unpack_romset(zip, ROM_DIR, unpack_progress) != 0) {
+        snprintf(msg, sizeof(msg), "\n\nThe ROM unpack failed:\n%s", cps3_romset_error);
+        return fail(msg);
+    }
+    printf("\x1b[19;2HDone. You can delete %s\n from the SD card now (44 MB).", zip + 5);
+    wait_key(240);
+    consoleClear();
+    return 1;
+}
+
+int main(int argc, char** argv) {
+    char path[256];
+    bool n3ds = false;
+    int setup = 0;
+    (void)argc;
+    (void)argv;
+
+    gfxInitDefault();
+    consoleInit(GFX_BOTTOM, &con);
+    printf("Street Fighter III 2nd Impact\n");
+    APT_CheckNew3DS(&n3ds);
+    if (n3ds) {
+        osSetSpeedupEnable(true);
+    }
+
+    if (!rom_files_present() && !unpack_rom_set()) {
+        return 0;
+    }
+    cps3_user5_stream(USER5_PAGES, USER5_RESERVE);
+    if (cps3_load_rom(ROM_DIR) != 0) {
+        return fail("The ROM files in\n" ROM_DIR "\ncould not be read.\n\nDelete them to unpack " ROM_SET "\nagain.");
+    }
+    ctr_controls_load();
+    if (!ctr_video_init()) {
+        return fail("The GPU renderer could not start.");
+    }
+    ctr_prefetch_start();
+    cps3_chr_dma_defer = 1;     /* big character DMA transfers run while waiting for the vertical blank */
+    if (!ctr_sound_init()) {
+        printf("\nNo sound: the DSP firmware is missing.\n"
+               "Run DSP1 once to dump it to\nsdmc:/3ds/dspfirm.cdc\n");
+        wait_key(180);
+    }
+    snprintf(path, sizeof(path), "%s/eeprom.bin", ROM_DIR);
+    cps3_eeprom_load(path);
+    bottom_help();
+
+    cps3_boot();
+    while (aptMainLoop()) {
+        hidScanInput();
+        if (setup) {
+            /* the game waits while the bottom screen asks for the buttons */
+            if (!ctr_controls_setup_frame()) {
+                setup = 0;
+                bottom_help();
+            }
+            gspWaitForVBlank();
+            continue;
+        }
+        switch (read_inputs()) {
+        case QUIT:
+            goto quit;
+        case SETUP:
+            setup = 1;
+            ctr_controls_setup_begin();
+            continue;
+        }
+        ctr_prefetch_poll();
+        cps3_run_frame();
+        ctr_sound_frame();
+        ctr_video_render();
+    }
+quit:
+    ctr_sound_exit();
+    ctr_prefetch_stop();
+    ctr_video_exit();
+    gfxExit();
+    return 0;
+}

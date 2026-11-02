@@ -102,6 +102,7 @@ if(NINTENDO_3DS)
         ${PORT}/ctr/ctr_sound.c
         ${PORT}/ctr/ctr_controls.c
         ${PORT}/cps3/cps3_romset.c
+        ${PORT}/cps3/cps3_region.c
         ${PORT}/ctr/ctr_depth.c)
     target_link_libraries(sf2i PRIVATE sf2i_game citro3d ctru z m)
     # ctr_depth.c reads the game's state through the game's headers
@@ -117,6 +118,7 @@ else()
     add_executable(sf2i WIN32
         ${CPS3_SOURCES}
         ${PORT}/cps3/cps3_romset.c
+        ${PORT}/cps3/cps3_region.c
         ${PORT}/sys/coro_win32.c
         ${PORT}/sys/divzero_win32.c
         ${PORT}/sdl/main_sdl.c)

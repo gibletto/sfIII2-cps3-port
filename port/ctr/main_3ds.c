@@ -11,7 +11,7 @@
  *
  * Controls: D-pad or Circle Pad to move; the other buttons are mapped in sdmc:/sf2i/controls.ini (ctr_controls.c).
  * SELECT inserts a coin; held with START it is the test switch (settings, free play), with L the service coin,
- * with R the button setup screen, with B it quits.
+ * with R the button and region setup screen, with B it quits.
  */
 
 #include <stdio.h>
@@ -27,6 +27,7 @@
 #include "ctr_video.h"
 #include "ctr_prefetch.h"
 #include "ctr_sound.h"
+#include "cps3_region.h"
 #include "ctr_controls.h"
 #include "cps3_romset.h"
 
@@ -204,6 +205,7 @@ int main(int argc, char** argv) {
         return fail("The ROM files in\n" ROM_DIR "\ncould not be read.\n\nDelete them to unpack " ROM_SET "\nagain.");
     }
     ctr_controls_load();
+    cps3_region_apply(ctr_controls_region());
     if (!ctr_video_init()) {
         return fail("The GPU renderer could not start.");
     }

@@ -70,7 +70,7 @@ up the SD card.
 | SELECT | insert a coin |
 | SELECT + START | operator (test) menu: settings, free play, difficulty and so on |
 | SELECT + L | service coin (a free credit) |
-| SELECT + R | button setup |
+| SELECT + R | button and region setup |
 | SELECT + B | quit |
 
 The attack buttons can be changed. SELECT + R opens a setup screen on the bottom screen that asks for a button
@@ -82,6 +82,24 @@ Settings are saved like on the arcade board.
 
 Publishing a GitHub release runs `.github/workflows/release.yml`. It builds the 3DS version with the devkitPro
 Docker image and the Windows version with MSYS2, and attaches both zips to the release.
+
+## Region
+
+The game takes its region from the BIOS, as the arcade board does; the BIOS in the ROM set is Asia's. The
+region can be changed without touching the ROM set: the port changes it in the copy of the BIOS in memory
+(`port/cps3/cps3_region.c`).
+
+- 3DS: SELECT + R, then LEFT and RIGHT choose the region and START saves it (setting the buttons saves it too).
+  It is the `REGION` line at the end of `sdmc:/sf2i/controls.ini`.
+- PC: `REGION` in `settings.ini`, next to `eeprom.bin`, which is made the first time the game runs.
+
+The regions are `BIOS` (the BIOS's own), `JAPAN`, `ASIA`, `EUROPE`, `USA`, `HISPANIC`, `BRAZIL` and `OCEANIA`.
+The new region is used the next time the game starts.
+The region also sets the language of the text: Japanese in Japan, Spanish in Hispanic, Portuguese in
+Brazil, English elsewhere. In Europe the operator menu (SYSTEM CONFIGURATION, LANGUAGE) can switch it to
+Spanish.
+
+A region with other default settings resets the operator settings to that region's, as on the arcade.
 
 ## Layout
 

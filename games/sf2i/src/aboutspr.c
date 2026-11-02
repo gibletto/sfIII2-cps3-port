@@ -433,7 +433,7 @@ u16 id;
 #ifdef HOST_PORT
     /* the board compares the set's address with the pattern ROM's; on the host the directory holds a set only
        for addresses inside it (cps3_hw.c, load_cg) */
-    if (cg_data_list[id].set != NULL) {
+    if (cg_data_list[id].set != NULL && cg_data_list[id].set != host_cg_bios_set) {
 #else
     if ((u32)cg_data_list[id].set > (u32)cg_data_tbl && (u32)cg_data_list[id].set < 0x6FFFFFF) {
 #endif

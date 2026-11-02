@@ -129,6 +129,11 @@ if(WIN32)
     target_link_options(sf2i PRIVATE "-Wl,--disable-dynamicbase")
 endif()
 
+# -DOLD_3DS_TEST=ON makes the Old 3DS test build: on a New 3DS it runs the way an Old 3DS runs (the Old 3DS memory
+# mode, 268 MHz, no New 3DS speed-up and so no L2 cache), and it installs beside the normal build as its own title,
+# with the same SD folder and settings
+option(OLD_3DS_TEST "3DS: make the Old 3DS test build" OFF)
+
 # The version on the 3DS builds, after the description the HOME Menu and Homebrew Launcher show: the release workflow
 # passes its tag, otherwise it is what git describe says
 set(PORT_VERSION "" CACHE STRING "Version shown on the 3DS builds (default: git describe)")
@@ -138,8 +143,25 @@ if(NOT PORT_VERSION)
 endif()
 
 if(NINTENDO_3DS)
-    ctr_create_3dsx(sf2i "SF III 2nd Impact" "CPS3 port ${PORT_VERSION}" ${PORT}/ctr/cia/icon.png)
-    ctr_create_cia(sf2i "SF III 2nd Impact" "Street Fighter III 2nd Impact (CPS3 port) ${PORT_VERSION}" ${PORT}/ctr/cia)
+    if(OLD_3DS_TEST)
+        target_compile_definitions(sf2i PRIVATE OLD_3DS_TEST=1)
+        # the RSF with its own title, the Old 3DS memory mode and the Old 3DS CPU speed
+        set(CIA_DIR ${CMAKE_CURRENT_BINARY_DIR}/cia_o3ds)
+        file(COPY ${PORT}/ctr/cia/icon.png ${PORT}/ctr/cia/banner.png ${PORT}/ctr/cia/banner.wav DESTINATION ${CIA_DIR})
+        file(READ ${PORT}/ctr/cia/sf2i.rsf rsf)
+        foreach(pair "Title;SFIII2OT" "ProductCode;CTR-H-S2IO" "UniqueId;0xF5F3D" "SystemModeExt;Legacy" "CpuSpeed;268MHz")
+            list(GET pair 0 key)
+            list(GET pair 1 value)
+            string(REGEX REPLACE "\n(  ${key} +: )[^\r\n]*" "\n\\1${value}" rsf "${rsf}")
+        endforeach()
+        file(WRITE ${CIA_DIR}/sf2i.rsf "${rsf}")
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${PORT}/ctr/cia/sf2i.rsf)
+        ctr_create_3dsx(sf2i "SF III 2nd Impact O3DS" "Old 3DS test build ${PORT_VERSION}" ${PORT}/ctr/cia/icon.png)
+        ctr_create_cia(sf2i "SF III 2nd Impact O3DS" "Street Fighter III 2nd Impact (O3DS test) ${PORT_VERSION}" ${CIA_DIR})
+    else()
+        ctr_create_3dsx(sf2i "SF III 2nd Impact" "CPS3 port ${PORT_VERSION}" ${PORT}/ctr/cia/icon.png)
+        ctr_create_cia(sf2i "SF III 2nd Impact" "Street Fighter III 2nd Impact (CPS3 port) ${PORT_VERSION}" ${PORT}/ctr/cia)
+    endif()
 
     # PICA200 shaders (vertex, then geometry), assembled and embedded as a C header (<name>_shbin)
     function(ctr_shader target pica)

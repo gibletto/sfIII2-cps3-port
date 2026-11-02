@@ -388,7 +388,11 @@ void eff94_check_and_go(WORK_Other* ewk) {
 s32 eff94_select(WORK_Other* ewk) {
     s16 ix;
     if (eff94_check_end(ewk)) {
+#ifdef HOST_PORT
+        return 1;    /* the board returns R0: eff94_check_end's 1 */
+#else
         return;
+#endif
     }
     if (ewk->wu.old_rno[6] > 96) {
         if (ewk->wu.rl_flag) {

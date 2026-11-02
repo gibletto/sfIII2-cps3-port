@@ -114,11 +114,7 @@ s16 stage8_base_y;  /* 020225A8, provisional name */
 BGW* bgw_ptr;  /* 020225AC */
 SUZI_CALC suzi_calc_w[2];  /* 020225B0 */
 Ideal_W ideal_w;  /* 020225C0 */
-#ifdef HOST_PORT
-u16 suzi_line_buf[2048] __attribute__((aligned(4)));  /* 020225C8; read and written as s32s too */
-#else
-u16 suzi_line_buf[2048];  /* 020225C8 */
-#endif
+SUZI_LINE_BUF suzi_line_buf;  /* 020225C8 */
 MVXY bg_mvxy;  /* 020235C8 */
 s16 bg_stop;  /* 020235E0 */
 s16 base_y_pos;  /* 020235E2 */

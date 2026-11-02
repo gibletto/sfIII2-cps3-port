@@ -45,9 +45,7 @@
 #include "demo01.h"
 #include "demo02_code.h"
 #include "RANKING.h"
-#ifdef HOST_PORT
-s16 Select_Player(void);    /* sel_pl.h: its s16 result is tested, so not implicitly int */
-#endif
+#include "sel_pl.h"
 #include "Manage.h"
 #include "manage_2.h"
 #include "Win.h"

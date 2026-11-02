@@ -283,11 +283,7 @@ void scdmd_19000(PLW* wk) {
 
 
 
-#ifdef HOST_PORT
-void scdmd_20000(PLW* wk) { setup_butt_own_data(&wk->wu); }   /* R4 is still wk on the board */
-#else
-void scdmd_20000(void) { setup_butt_own_data(); }
-#endif
+void scdmd_20000(PLW* wk) { setup_butt_own_data(&wk->wu); }
 
 
 

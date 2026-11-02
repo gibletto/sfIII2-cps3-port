@@ -39,3 +39,12 @@ const s16 effF7_pos_tbl[23][6][2] = {
     { { 601, 77 }, { 567, 43 }, { 490, 60 }, { 484, 56 }, { 550, 58 }, { 548, 56 } },
     { { 597, 57 }, { 583, 43 }, { 490, 60 }, { 484, 56 }, { 550, 58 }, { 548, 56 } },
 };
+
+#ifdef HOST_PORT
+/* The board's reads of row 23 run on into the bytes after this table in the arcade link: the initialiser of
+   effect_F7_move's effF7_jp (EFFF7.C), the addresses of effF7_0000, effF7_0001, effF7_0002 (twice) and
+   effF7_0003 (twice), each read as an x, y pair. Their halfwords as the board has them: */
+const s16 effF7_pos_tbl_board_tail[6][2] = {
+    { 0x060E, 0x6222 }, { 0x060E, 0x64E6 }, { 0x060E, 0x67C4 }, { 0x060E, 0x67C4 }, { 0x060E, 0x6980 }, { 0x060E, 0x6980 },
+};
+#endif

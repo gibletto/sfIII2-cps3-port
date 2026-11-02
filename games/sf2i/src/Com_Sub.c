@@ -34,6 +34,18 @@
 #include "Com_Sub.h"
 #include "fighter.h"
 
+#ifdef HOST_PORT
+#include "host_null.h"
+/* Gill's jump attack pattern (Passive00_0023) can reach its command step before any command is set: Tech_Address
+   is then null, and the board reads the command from address 0, the BIOS */
+static s16 tech_word(s16 pl, s32 ix) {
+    return Tech_Address[pl] != NULL ? Tech_Address[pl][ix] : (s16)cps3_low_read_be(ix * 2, 2, "Com_Sub Tech_Address");
+}
+#define TECH_WORD(pl, ix) tech_word(pl, ix)
+#else
+#define TECH_WORD(pl, ix) (Tech_Address[pl][ix])
+#endif
+
 /* Rapid_No[pl][0] in Rapid_Sub: the kind of rapid fire */
 #define RAPID_OFF       0       /* none */
 #define RAPID_BURST     2       /* three presses, a pause, then steady presses */
@@ -3127,8 +3139,8 @@ s16 Power_Level;
 u16 Tech_Number;
 s16 Ex_Shot;
 {
-    if (Tech_Address[wk->wu.id][Tech_Index[wk->wu.id] + 4] != 0x1C) {
-        Lever_Buff[wk->wu.id] = Tech_Address[wk->wu.id][Tech_Index[wk->wu.id] + 3] & 0x7FFF;
+    if (TECH_WORD(wk->wu.id, Tech_Index[wk->wu.id] + 4) != 0x1C) {
+        Lever_Buff[wk->wu.id] = TECH_WORD(wk->wu.id, Tech_Index[wk->wu.id] + 3) & 0x7FFF;
         Lever_Buff[wk->wu.id] = datacmd_conpanecmd(Lever_Buff[wk->wu.id]);
         if (wk->wu.rl_waza) {
             if (Lever_Buff[wk->wu.id] & LEVER_LR) {
@@ -3138,19 +3150,26 @@ s16 Ex_Shot;
         Tech_Index[wk->wu.id] += 4;
         return 1;
     } else {
-        Lever_Buff[wk->wu.id] = Tech_Address[wk->wu.id][Tech_Index[wk->wu.id] + 3] & 0x7FFF;
+        Lever_Buff[wk->wu.id] = TECH_WORD(wk->wu.id, Tech_Index[wk->wu.id] + 3) & 0x7FFF;
         if (wk->wu.rl_waza) {
             if (Lever_Buff[wk->wu.id] & LEVER_LR) {
                 Lever_Buff[wk->wu.id] ^= LEVER_LR;
             }
         }
-        if (Tech_Address[wk->wu.id][7] == 0x80) {
+        if (TECH_WORD(wk->wu.id, 7) == 0x80) {
             return -1;
         }
         Tech_Index[wk->wu.id] = 7;
         if (plw[wk->wu.id].sa->ex && (Ex_Shot == 0x70 || Ex_Shot == 0x380)) {
             Lever_Buff[wk->wu.id] |= Ex_Shot;
         } else {
+#ifdef HOST_PORT
+            if (Tech_Address[wk->wu.id] == NULL) {
+                s16 cmd[16];        /* renbanshot_conpaneshot reads only cmd[Power_Level] */
+                cmd[Power_Level & 15] = TECH_WORD(wk->wu.id, Power_Level & 15);
+                Lever_Buff[wk->wu.id] |= renbanshot_conpaneshot(cmd, Power_Level & 15);
+            } else
+#endif
             Lever_Buff[wk->wu.id] |= renbanshot_conpaneshot(Tech_Address[wk->wu.id], Power_Level);
         }
         if (My_char[wk->wu.id] == PL_RYU && Tech_Number == 0x8015 && Power_Level != 8) {

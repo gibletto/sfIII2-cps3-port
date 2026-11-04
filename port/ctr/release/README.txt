@@ -37,7 +37,7 @@ unpack", about a minute). After that you can delete the zip.
     SELECT               insert a coin
     SELECT + START       operator (test) menu: settings, free play
     SELECT + L           service coin (a free credit)
-    SELECT + R           button and region setup
+    SELECT + R           button, region and screen setup
     SELECT + B           quit
 
 Changing the buttons: hold SELECT and press R. The game pauses and the bottom screen asks you to press the
@@ -52,6 +52,11 @@ sdmc:/sf2i/controls.ini. The region also sets the language of the text: Japanese
 Hispanic, Portuguese in Brazil, English elsewhere. In Europe the operator menu (SYSTEM CONFIGURATION,
 LANGUAGE) can switch it to Spanish. Changing the region resets the operator settings to that region's, as on
 the arcade.
+
+Screen: the arcade drew its picture for a 4:3 monitor, so its pixels were narrower than they are tall. Hold
+SELECT and press R, choose with UP and DOWN, and press START: Square pixels (the default, sharp), 4:3 pixels
+(the arcade's shape, a narrower picture, a little softer) or 4:3 pixels, full height (the same, filling the
+screen's height, softer). It is saved as the SCREEN line at the end of sdmc:/sf2i/controls.ini.
 
 In the operator menu, CONFIGURATION has the game and coin settings, including free play. Settings and high
 scores are saved in sdmc:/sf2i/rom-data/eeprom.bin.

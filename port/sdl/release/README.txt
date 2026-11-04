@@ -38,6 +38,11 @@ Hispanic, Portuguese in Brazil, English elsewhere. In Europe the operator menu (
 LANGUAGE) can switch it to Spanish. Changing the region resets the operator settings to that region's, as on
 the arcade.
 
+Screen: SCREEN in roms/settings.ini is SQUARE (the default, square pixels) or 4:3 (the shape a 4:3 arcade
+monitor gave them, a narrower picture). SCALE is INTEGER (the default: the height a whole multiple of the
+game's, so lines stay sharp), PERFECT (every pixel the same size; with 4:3 the nearest whole-number shape) or
+FIT (as big as the window). On a 4K screen, 4:3 with INTEGER is exactly 7x9 screen pixels per game pixel.
+
 You can also start it as sf2i.exe <path to sfiii2n.zip>.
 
 Street Fighter and Capcom are trademarks of Capcom. This project is not affiliated with or endorsed by Capcom.
